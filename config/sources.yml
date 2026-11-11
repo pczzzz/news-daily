@@ -18,6 +18,7 @@ settings:
   # 日报最多收录条数
   max_items: 70
   # 单个板块最多收录条数（防止热门板块把冷门板块挤没）
+  min_per_category: 3
   max_per_category: 6
   # 只收录多少天内的新闻（超过的旧闻直接丢弃）
   max_age_days: 7
@@ -129,8 +130,49 @@ keywords:
       - 央行
       - 利率
       - 通胀
+      - 通缩
       - 股市
       - 汇率
+      - 经济
+      - 增长
+      - 贸易
+      - 出口
+      - 进口
+      - 制造业
+      - 消费
+      - 失业
+      - 就业
+      - 财政
+      - 债务
+      - 美元
+      - 人民币
+      - 大宗商品
+      - 美联储
+      - 欧洲央行
+      - 日本央行
+      - economy
+      - economic
+      - trade
+      - growth
+      - recession
+      - jobs
+      - unemployment
+      - fiscal
+      - debt
+      - dollar
+      - yuan
+      - markets
+      - investors
+      - earnings
+      - profit
+      - revenue
+      - IPO
+      - valuation
+      - bond
+      - yield
+      - central bank
+      - ECB
+      - BOJ
       - 降息
       - 加息
       - 关税
