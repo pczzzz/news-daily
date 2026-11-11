@@ -461,23 +461,17 @@ sources:
     lang: en
 
   # ========== 3. 中国与亚太 ==========
-  - name: "Nikkei Asia"
-    url: "https://asia.nikkei.com/rss/feed/na-top-stories"
-    category: "中国与亚太"
-    weight: 9
-    lang: en
-
   - name: "SCMP"
     url: "https://www.scmp.com/rss/91/feed"
     category: "中国与亚太"
     weight: 9
     lang: en
 
-  - name: "联合早报·中国"
-    url: "https://www.zaobao.com.sg/rss/realtime/china"
+  - name: "Japan Times"
+    url: "https://www.japantimes.co.jp/feed/"
     category: "中国与亚太"
     weight: 8
-    lang: zh
+    lang: en
 
   - name: "日经中文网"
     url: "https://cn.nikkei.com/rss/feed/nikkei-top"
@@ -549,7 +543,7 @@ sources:
     lang: en
 
   - name: "Hacker News"
-    url: "https://hnrss.org/frontpage"
+    url: "https://hnrss.org/best"
     category: "科技新闻"
     weight: 7
     lang: en
@@ -657,12 +651,6 @@ sources:
     lang: en
 
   # ========== 13. 教育 ==========
-  - name: "Times Higher Education"
-    url: "https://www.timeshighereducation.com/feed"
-    category: "教育"
-    weight: 8
-    lang: en
-
   - name: "Inside Higher Ed"
     url: "https://www.insidehighered.com/rss.xml"
     category: "教育"
