@@ -62,6 +62,18 @@ NOISE_TAGS = (
     "iframe", "noscript", "svg", "button", "figure", "figcaption",
 )
 
+# 正文提取时要剔除的噪音句子（播放器提示、订阅引导、推荐位等）
+NOISE_TEXT = re.compile(
+    r"("
+    r"enable\s+javascript|javascript\s+is\s+disabled|to\s+view\s+this\s+video|"
+    r"watch\s+this\s+video|your\s+browser\s+does\s+not|"
+    r"cookie|subscribe|newsletter|sign\s+up|sign\s+in|log\s+in|"
+    r"all\s+rights\s+reserved|advertisement|share\s+this|follow\s+us|"
+    r"read\s+more|related\s+stories|download\s+the\s+app|click\s+here"
+    r")",
+    re.I,
+)
+
 
 # ----------------------------------------------------------------------
 # 工具函数
@@ -215,8 +227,11 @@ def extract_article_text(page_html: str, max_paragraphs: int = 10) -> list[str]:
         # 太短的多半是按钮、版权、图片说明
         if len(text) < 45:
             continue
-        # 去掉常见的站点尾巴
-        if re.search(r"(cookie|subscribe|newsletter|sign up|all rights reserved)", text, re.I):
+        # 去掉常见的站点尾巴、播放器提示、订阅引导
+        if NOISE_TEXT.search(text):
+            continue
+        # 以问号结尾的短句多半是推荐位/小标题，不是正文
+        if text.endswith(("?", "？")) and len(text) < 110 and "." not in text[:-1]:
             continue
         key = text[:60].lower()
         if key in seen:
