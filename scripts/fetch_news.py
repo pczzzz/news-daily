@@ -827,7 +827,10 @@ def main() -> int:
         t = normalize_title(item["title"])
         if not u or u in seen_urls or (t and t in seen_titles):
             continue
-        if url_hash(u) in history:
+        # 跨天去重：只在「不是今天」时跳过。
+        # 同一天重跑（改配置 / 手动补跑）不过滤，避免板块越跑越少。
+        h_ts = history.get(url_hash(u))
+        if h_ts and not str(h_ts).startswith(now_utc.date().isoformat()):
             continue
         seen_urls.add(u)
         if t:
