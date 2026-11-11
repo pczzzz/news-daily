@@ -52,8 +52,9 @@ TRACKING_PARAMS = re.compile(
     r"([?&])(utm_[a-z]+|fbclid|gclid|ref|source|spm|from)=[^&]*&?", re.I
 )
 
-# Google 免费翻译接口（无需 Key，海外 IP 可直连）
-TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
+# Google 翻译的词典扩展接口（无需 Key，支持一次提交多段，返回等长数组）
+# 注意：/translate_a/single 在 GitHub 服务器 IP 上会被 429 限流，这个端点不会。
+TRANSLATE_URL = "https://translate.googleapis.com/translate_a/t"
 
 # 正文提取时要剔除的噪音标签
 NOISE_TAGS = (
@@ -255,53 +256,86 @@ def fetch_article(item: dict, settings: dict) -> dict:
 # ----------------------------------------------------------------------
 # 翻译（逐段直译，不改写、不总结）
 # ----------------------------------------------------------------------
-def translate_text(text: str, timeout: int = 20) -> str:
-    """调用 Google 免费翻译接口直译一段文本。
+def translate_batch(texts: list[str], timeout: int = 45) -> list[str]:
+    """一次请求翻译多段，返回与输入等长的列表。
 
-    刻意不做任何改写/扩写：输入什么就翻什么，保证是一手信息的精确保真。
+    刻意不做任何改写/扩写：输入什么就翻什么，逐段对应，保证是一手信息的精确保真。
+    接口返回形如 [["译文","源语言"], ...]，顺序与 q 参数一致。
     """
-    text = (text or "").strip()
-    if not text or looks_chinese(text):
-        return text
-    for attempt in range(3):
+    cleaned = [(t or "").strip() for t in texts]
+    if not cleaned:
+        return []
+    # 已经是中文的段落不用再翻，直接回填，避免占额度
+    todo = [i for i, t in enumerate(cleaned) if t and not looks_chinese(t)]
+    if not todo:
+        return cleaned
+
+    params = [("client", "dict-chrome-ex"), ("sl", "auto"), ("tl", "zh-CN")]
+    for i in todo:
+        params.append(("q", cleaned[i][:4000]))
+
+    for attempt in range(4):
         try:
             resp = requests.get(
-                TRANSLATE_URL,
-                params={
-                    "client": "gtx",
-                    "sl": "auto",
-                    "tl": "zh-CN",
-                    "dt": "t",
-                    "q": text[:4800],
-                },
-                headers={"User-Agent": UA},
-                timeout=timeout,
+                TRANSLATE_URL, params=params, headers={"User-Agent": UA}, timeout=timeout
             )
             resp.raise_for_status()
             data = resp.json()
-            translated = "".join(seg[0] for seg in data[0] if seg and seg[0])
-            translated = translated.strip()
-            if translated:
-                return translated
+            if not isinstance(data, list):
+                raise ValueError("unexpected payload")
+            out = []
+            for seg in data:
+                if isinstance(seg, list) and seg:
+                    out.append(str(seg[0]).strip())
+                else:
+                    out.append(str(seg).strip())
+            if len(out) == len(todo):
+                for idx, zh in zip(todo, out):
+                    cleaned[idx] = zh or cleaned[idx]
+                return cleaned
+            raise ValueError(f"length mismatch {len(out)} != {len(todo)}")
         except Exception:  # noqa: BLE001 - 重试
-            pass
-        time.sleep(1 + attempt * 2)
-    return ""
+            time.sleep(1.5 * (attempt + 1))
+    # 全部重试失败：保留英文原文，由渲染层标注，不静默丢信息
+    return cleaned
 
 
-def translate_paragraphs(paragraphs: list[str], workers: int = 6) -> list[str]:
-    """并发逐段翻译，保持原始顺序。翻译失败的段落返回空串。"""
+def chunk_indices(texts: list[str], max_chars: int = 2200) -> list[list[int]]:
+    """把段落按字符数切批，避免 GET 请求 URL 过长。"""
+    batches: list[list[int]] = []
+    cur: list[int] = []
+    size = 0
+    for i, t in enumerate(texts):
+        length = len(t)
+        if cur and size + length > max_chars:
+            batches.append(cur)
+            cur, size = [], 0
+        cur.append(i)
+        size += length
+    if cur:
+        batches.append(cur)
+    return batches
+
+
+def translate_paragraphs(paragraphs: list[str], workers: int = 4) -> list[str]:
+    """分批并发翻译草稿，保持段落一一对应。"""
     if not paragraphs:
         return []
     results: list[str] = [""] * len(paragraphs)
+    batches = chunk_indices(paragraphs)
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        futures = {pool.submit(translate_text, p): i for i, p in enumerate(paragraphs)}
+        futures = {
+            pool.submit(translate_batch, [paragraphs[i] for i in batch]): batch
+            for batch in batches
+        }
         for future in as_completed(futures):
-            idx = futures[future]
+            batch = futures[future]
             try:
-                results[idx] = future.result()
+                out = future.result()
             except Exception:  # noqa: BLE001
-                results[idx] = ""
+                out = []
+            for idx, zh in zip(batch, out):
+                results[idx] = zh
     return results
 
 
@@ -316,21 +350,23 @@ def enrich_items(items: list[dict], settings: dict) -> None:
     if not settings.get("translate", True):
         return
 
-    trans_workers = max(1, int(settings.get("translate_concurrency", 6)))
-    for item in items:
-        # 标题 + 摘要一起并发（两个请求）
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            fut_title = pool.submit(translate_text, item["title"])
-            fut_summary = pool.submit(translate_text, item.get("summary", ""))
-            item["title_zh"] = fut_title.result() or item["title"]
-            item["summary_zh"] = fut_summary.result() or item.get("summary", "")
-        # 正文逐段翻译，保持段落一一对应
+    trans_workers = max(1, int(settings.get("translate_concurrency", 4)))
+
+    def process(item: dict) -> None:
+        # 标题 + 摘要一次请求搞定
+        head = translate_batch([item["title"], item.get("summary", "")])
+        item["title_zh"] = (head[0] if head else "") or item["title"]
+        item["summary_zh"] = (head[1] if len(head) > 1 else "") or item.get("summary", "")
+        # 正文按段落分批翻译，保持一一对应
         src_paras = item.get("article_en") or []
         zh_paras = translate_paragraphs(src_paras, trans_workers)
         item["article_zh"] = [
-            zh if zh else f"（本段翻译失败，原文如下）{en}"
+            zh if zh else f"（本段翻译失败，保留原文）{en}"
             for zh, en in zip(zh_paras, src_paras)
         ]
+
+    with ThreadPoolExecutor(max_workers=max(1, int(settings.get("article_concurrency", 4)))) as pool:
+        list(pool.map(process, items))
 
 
 # ----------------------------------------------------------------------
