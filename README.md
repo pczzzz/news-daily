@@ -45,13 +45,17 @@ README.md
 
 ### 第 5 步：看日报
 
-把下面地址里的 `你的用户名` 和 `news-daily` 换成你自己的：
+仓库已经开启 GitHub Pages，直接访问：
 
 ```
-https://cdn.statically.io/gh/你的用户名/news-daily/main/docs/index.html
+https://pczzzz.github.io/news-daily/
 ```
 
-这个地址走的是 statically.io 的 CDN，国内可直连。**存成浏览器书签，每天早上点一下就行。**
+这个域名国内可直连，**存成浏览器书签，每天早上点一下就行。**
+
+> 备选地址（如果 Pages 被抽风）：
+> - 原站：`https://raw.githubusercontent.com/pczzzz/news-daily/main/docs/index.html`（浏览器会当纯文本，右键“另存为 .html”再打开）
+> - statically.io CDN：`https://cdn.statically.io/gh/pczzzz/news-daily/main/docs/index.html`（公司网络实测超时，仅作外网备份）
 
 ---
 
