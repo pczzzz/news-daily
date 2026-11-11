@@ -4,11 +4,11 @@
 每日资讯日报生成器
 ==================
 读取 config/sources.yml，并发抓取全部 RSS，按关键词打分、跨日去重，
-输出 Markdown 日报 + 单页 HTML。
+再为入选条目抓取**原文正文**并逐段翻译成中文，输出 Markdown 日报 + 单页 HTML。
 
 设计原则：
-- 任何单个源失败都不影响整体（记录到 failures，继续跑）
-- 不依赖任何 LLM，零 API 成本；需要摘要时另加
+- 任何单个源/单篇文章失败都不影响整体（记录到 failures，继续跑）
+- 翻译采用逐段直译，不改写、不总结、不删减，保证信息完整
 - 幂等：同一天重复运行会覆盖当天日报，不会产生重复文件
 """
 
@@ -30,6 +30,7 @@ try:
     import feedparser
     import requests
     import yaml
+    from bs4 import BeautifulSoup
 except ImportError as exc:  # pragma: no cover
     sys.stderr.write(
         f"缺少依赖：{exc}\n请先执行 pip install -r requirements.txt\n"
@@ -49,6 +50,15 @@ UA = (
 # URL 里需要剔除的追踪参数
 TRACKING_PARAMS = re.compile(
     r"([?&])(utm_[a-z]+|fbclid|gclid|ref|source|spm|from)=[^&]*&?", re.I
+)
+
+# Google 免费翻译接口（无需 Key，海外 IP 可直连）
+TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
+
+# 正文提取时要剔除的噪音标签
+NOISE_TAGS = (
+    "script", "style", "nav", "footer", "header", "aside", "form",
+    "iframe", "noscript", "svg", "button", "figure", "figcaption",
 )
 
 
@@ -101,6 +111,24 @@ def parse_time(entry: Any) -> datetime | None:
             except (ValueError, OverflowError):
                 continue
     return None
+
+
+def looks_chinese(text: str) -> bool:
+    """判断文本是否已经是中文（无需翻译）。"""
+    if not text:
+        return True
+    zh = len(re.findall(r"[\u4e00-\u9fff]", text))
+    return zh > len(text) * 0.2
+
+
+def escape(text: str) -> str:
+    return (
+        (text or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
 
 
 # ----------------------------------------------------------------------
@@ -161,6 +189,148 @@ def fetch_all(sources: list[dict], settings: dict) -> tuple[list[dict], dict[str
                 failures[name] = res["error"]
             items.extend(res["items"])
     return items, failures
+
+
+# ----------------------------------------------------------------------
+# 原文正文提取
+# ----------------------------------------------------------------------
+def extract_article_text(page_html: str, max_paragraphs: int = 10) -> list[str]:
+    """从文章页 HTML 里提取正文段落。
+
+    策略：优先 <article>/<main> 容器，退化为全页；只保留有实质内容的段落，
+    按出现顺序截取前 max_paragraphs 段，保证不混入导航、评论、推荐位。
+    """
+    soup = BeautifulSoup(page_html, "html.parser")
+    for tag in soup(list(NOISE_TAGS)):
+        tag.decompose()
+
+    container = soup.find("article") or soup.find("main") or soup.body or soup
+
+    paragraphs: list[str] = []
+    seen: set[str] = set()
+    for node in container.find_all(["p", "h2", "h3"]):
+        text = node.get_text(" ", strip=True)
+        text = re.sub(r"\s+", " ", text).strip()
+        # 太短的多半是按钮、版权、图片说明
+        if len(text) < 45:
+            continue
+        # 去掉常见的站点尾巴
+        if re.search(r"(cookie|subscribe|newsletter|sign up|all rights reserved)", text, re.I):
+            continue
+        key = text[:60].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        paragraphs.append(text)
+        if len(paragraphs) >= max_paragraphs:
+            break
+    return paragraphs
+
+
+def fetch_article(item: dict, settings: dict) -> dict:
+    """抓取单篇原文正文，失败时留空并记录原因。"""
+    if not settings.get("enrich_article", True):
+        return item
+    try:
+        resp = requests.get(
+            item["link"],
+            timeout=settings.get("request_timeout", 20),
+            headers={
+                "User-Agent": UA,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8",
+            },
+        )
+        resp.raise_for_status()
+        item["article_en"] = extract_article_text(
+            resp.text, int(settings.get("article_paragraphs", 10))
+        )
+        item["article_error"] = None
+    except Exception as exc:  # noqa: BLE001
+        item["article_en"] = []
+        item["article_error"] = f"{type(exc).__name__}"
+    return item
+
+
+# ----------------------------------------------------------------------
+# 翻译（逐段直译，不改写、不总结）
+# ----------------------------------------------------------------------
+def translate_text(text: str, timeout: int = 20) -> str:
+    """调用 Google 免费翻译接口直译一段文本。
+
+    刻意不做任何改写/扩写：输入什么就翻什么，保证是一手信息的精确保真。
+    """
+    text = (text or "").strip()
+    if not text or looks_chinese(text):
+        return text
+    for attempt in range(3):
+        try:
+            resp = requests.get(
+                TRANSLATE_URL,
+                params={
+                    "client": "gtx",
+                    "sl": "auto",
+                    "tl": "zh-CN",
+                    "dt": "t",
+                    "q": text[:4800],
+                },
+                headers={"User-Agent": UA},
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            translated = "".join(seg[0] for seg in data[0] if seg and seg[0])
+            translated = translated.strip()
+            if translated:
+                return translated
+        except Exception:  # noqa: BLE001 - 重试
+            pass
+        time.sleep(1 + attempt * 2)
+    return ""
+
+
+def translate_paragraphs(paragraphs: list[str], workers: int = 6) -> list[str]:
+    """并发逐段翻译，保持原始顺序。翻译失败的段落返回空串。"""
+    if not paragraphs:
+        return []
+    results: list[str] = [""] * len(paragraphs)
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        futures = {pool.submit(translate_text, p): i for i, p in enumerate(paragraphs)}
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                results[idx] = future.result()
+            except Exception:  # noqa: BLE001
+                results[idx] = ""
+    return results
+
+
+def enrich_items(items: list[dict], settings: dict) -> None:
+    """为入选条目补全原文正文并翻译（原地修改）。"""
+    if not settings.get("enrich_article", True):
+        return
+    workers = max(1, int(settings.get("concurrency", 8)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(lambda it: fetch_article(it, settings), items))
+
+    if not settings.get("translate", True):
+        return
+
+    trans_workers = max(1, int(settings.get("translate_concurrency", 6)))
+    for item in items:
+        # 标题 + 摘要一起并发（两个请求）
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            fut_title = pool.submit(translate_text, item["title"])
+            fut_summary = pool.submit(translate_text, item.get("summary", ""))
+            item["title_zh"] = fut_title.result() or item["title"]
+            item["summary_zh"] = fut_summary.result() or item.get("summary", "")
+        # 正文逐段翻译，保持段落一一对应
+        src_paras = item.get("article_en") or []
+        zh_paras = translate_paragraphs(src_paras, trans_workers)
+        item["article_zh"] = [
+            zh if zh else f"（本段翻译失败，原文如下）{en}"
+            for zh, en in zip(zh_paras, src_paras)
+        ]
 
 
 # ----------------------------------------------------------------------
@@ -246,6 +416,9 @@ def load_history(settings: dict) -> dict:
 # ----------------------------------------------------------------------
 # 渲染
 # ----------------------------------------------------------------------
+CATEGORY_ORDER = ["国际硬新闻", "深度政论", "科技新闻", "中文视角", "军事防务", "其他"]
+
+
 def render_markdown(date_str: str, groups: dict[str, list[dict]], failures: dict[str, str], stats: dict) -> str:
     lines = [
         f"# 每日资讯日报 · {date_str}",
@@ -255,8 +428,7 @@ def render_markdown(date_str: str, groups: dict[str, list[dict]], failures: dict
         "",
     ]
 
-    order = ["国际硬新闻", "深度政论", "科技新闻", "中文视角", "军事防务", "其他"]
-    for category in order:
+    for category in CATEGORY_ORDER:
         items = groups.get(category)
         if not items:
             continue
@@ -265,11 +437,21 @@ def render_markdown(date_str: str, groups: dict[str, list[dict]], failures: dict
         for idx, item in enumerate(items, 1):
             published = item.get("published")
             when = published.astimezone().strftime("%m-%d %H:%M") if published else "—"
-            lines.append(f"**{idx}. [{item['title']}]({item['link']})**")
-            meta = f"　　`{item['source_name']}` · {when} · 评分 {item['score']}"
-            lines.append(meta)
-            if item.get("summary"):
-                lines.append(f"　　{item['summary']}")
+            title_zh = item.get("title_zh") or item["title"]
+            lines.append(f"**{idx}. {title_zh}**")
+            lines.append(f"　　`{item['source_name']}` · {when} · 评分 {item['score']} · [原文]({item['link']})")
+            lines.append(f"　　<sub>{item['title']}</sub>")
+            if item.get("summary_zh"):
+                lines.append(f"　　{item['summary_zh']}")
+            zh_paras = item.get("article_zh") or []
+            if zh_paras:
+                lines.append("")
+                lines.append("<details><summary>展开全文</summary>")
+                lines.append("")
+                for para in zh_paras:
+                    lines.append(para)
+                    lines.append("")
+                lines.append("</details>")
             lines.append("")
 
     if failures:
@@ -293,33 +475,44 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>每日资讯日报 · {date_str}</title>
 <style>
-  :root {{ --fg:#1a1a1a; --muted:#6b7280; --bg:#fafafa; --card:#fff; --line:#e5e7eb; --accent:#1d4ed8; }}
+  :root {{ --fg:#1a1a1a; --muted:#6b7280; --bg:#fafafa; --card:#fff; --line:#e5e7eb; --accent:#1d4ed8; --soft:#f3f4f6; }}
   @media (prefers-color-scheme: dark) {{
-    :root {{ --fg:#e5e7eb; --muted:#9ca3af; --bg:#111827; --card:#1f2937; --line:#374151; --accent:#60a5fa; }}
+    :root {{ --fg:#e5e7eb; --muted:#9ca3af; --bg:#111827; --card:#1f2937; --line:#374151; --accent:#60a5fa; --soft:#111827; }}
   }}
   * {{ box-sizing: border-box; }}
   body {{ margin:0; padding:24px 16px; background:var(--bg); color:var(--fg);
-         font:16px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }}
-  .wrap {{ max-width:820px; margin:0 auto; }}
+         font:16px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }}
+  .wrap {{ max-width:840px; margin:0 auto; }}
   h1 {{ font-size:26px; margin:0 0 4px; }}
   .meta {{ color:var(--muted); font-size:14px; margin-bottom:28px; }}
   h2 {{ font-size:18px; margin:32px 0 14px; padding-left:10px; border-left:4px solid var(--accent); }}
   .item {{ background:var(--card); border:1px solid var(--line); border-radius:10px;
-           padding:14px 16px; margin-bottom:12px; transition:.15s; }}
-  .item:hover {{ border-color:var(--accent); transform:translateY(-1px); }}
-  .item a {{ color:var(--fg); text-decoration:none; font-weight:600; }}
-  .item a:hover {{ color:var(--accent); }}
-  .sub {{ color:var(--muted); font-size:13px; margin:6px 0; }}
-  .sum {{ font-size:14px; color:#4b5563; }}
-  @media (prefers-color-scheme: dark) {{ .sum {{ color:#9ca3af; }} }}
-  .score {{ display:inline-block; padding:0 6px; border-radius:4px; background:var(--line); font-size:12px; }}
-  details {{ margin-top:36px; font-size:13px; color:var(--muted); }}
+           padding:16px 18px; margin-bottom:14px; transition:.15s; }}
+  .item:hover {{ border-color:var(--accent); }}
+  .item .title {{ color:var(--fg); text-decoration:none; font-weight:700; font-size:17px; display:block; }}
+  .item .title:hover {{ color:var(--accent); }}
+  .orig {{ color:var(--muted); font-size:13px; margin-top:4px; line-height:1.5; }}
+  .sub {{ color:var(--muted); font-size:13px; margin:8px 0; }}
+  .score {{ display:inline-block; padding:0 6px; border-radius:4px; background:var(--soft); font-size:12px; }}
+  .sum {{ font-size:15px; color:#374151; margin-top:6px; }}
+  @media (prefers-color-scheme: dark) {{ .sum {{ color:#cbd5e1; }} }}
+  details {{ margin-top:10px; }}
+  details > summary {{ cursor:pointer; font-size:14px; color:var(--accent); list-style:none; user-select:none; }}
+  details > summary::-webkit-details-marker {{ display:none; }}
+  details > summary::before {{ content:"▸ "; }}
+  details[open] > summary::before {{ content:"▾ "; }}
+  .zh p {{ margin:10px 0; font-size:15px; line-height:1.85; }}
+  .en {{ margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }}
+  .en p {{ margin:8px 0; font-size:14px; line-height:1.7; color:var(--muted); font-family:Georgia,"Times New Roman",serif; }}
+  .src {{ display:inline-block; margin-top:10px; font-size:13px; color:var(--accent); text-decoration:none; }}
+  .src:hover {{ text-decoration:underline; }}
+  .fail {{ margin-top:36px; font-size:13px; color:var(--muted); }}
 </style>
 </head>
 <body>
 <div class="wrap">
 <h1>每日资讯日报 · {date_str}</h1>
-<div class="meta">{generated}　共 {total} 条 · {ok}/{all} 个源正常</div>
+<div class="meta">{generated}　共 {total} 条 · {ok}/{all} 个源正常 · 中文为逐段直译</div>
 {body}
 </div>
 </body>
@@ -327,23 +520,53 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
+def render_item_html(item: dict) -> str:
+    published = item.get("published")
+    when = published.astimezone().strftime("%m-%d %H:%M") if published else "—"
+    title_zh = escape(item.get("title_zh") or item["title"])
+    summary_zh = escape(item.get("summary_zh") or "")
+
+    parts = [
+        f'<div class="item">',
+        f'<a class="title" href="{escape(item["link"])}" target="_blank" rel="noopener">{title_zh}</a>',
+        f'<div class="orig">{escape(item["title"])}</div>',
+        f'<div class="sub">{escape(item["source_name"])} · {when} · '
+        f'<span class="score">{item["score"]}</span></div>',
+    ]
+    if summary_zh:
+        parts.append(f'<div class="sum">{summary_zh}</div>')
+
+    zh_paras = item.get("article_zh") or []
+    en_paras = item.get("article_en") or []
+    if zh_paras:
+        body_zh = "".join(f"<p>{escape(p)}</p>" for p in zh_paras)
+        parts.append(f'<details><summary>展开全文（中文翻译）</summary><div class="zh">{body_zh}')
+        if en_paras:
+            body_en = "".join(f"<p>{escape(p)}</p>" for p in en_paras)
+            parts.append(f'<details class="en"><summary>English original</summary>{body_en}</details>')
+        parts.append("</div></details>")
+    elif item.get("article_error"):
+        parts.append(
+            f'<div class="sub">（原文抓取失败：{escape(item["article_error"])}，'
+            f'<a class="src" href="{escape(item["link"])}" target="_blank">手动打开原文</a>）</div>'
+        )
+
+    parts.append(
+        f'<a class="src" href="{escape(item["link"])}" target="_blank" rel="noopener">阅读原文 →</a>'
+    )
+    parts.append("</div>")
+    return "".join(parts)
+
+
 def render_html(date_str: str, groups: dict[str, list[dict]], stats: dict) -> str:
     blocks = []
-    order = ["国际硬新闻", "深度政论", "科技新闻", "中文视角", "军事防务", "其他"]
-    for category in order:
+    for category in CATEGORY_ORDER:
         items = groups.get(category)
         if not items:
             continue
         blocks.append(f"<h2>{category}</h2>")
         for item in items:
-            published = item.get("published")
-            when = published.astimezone().strftime("%m-%d %H:%M") if published else "—"
-            summary = f'<div class="sum">{item["summary"]}</div>' if item.get("summary") else ""
-            blocks.append(
-                f'<div class="item"><a href="{item["link"]}" target="_blank" rel="noopener">{item["title"]}</a>'
-                f'<div class="sub">{item["source_name"]} · {when} · '
-                f'<span class="score">{item["score"]}</span></div>{summary}</div>'
-            )
+            blocks.append(render_item_html(item))
     return HTML_TEMPLATE.format(
         date_str=date_str,
         generated=datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
@@ -381,11 +604,11 @@ def main() -> int:
         now_local = datetime.now()
     date_str = now_local.strftime("%Y-%m-%d")
 
-    print(f"[1/4] 开始抓取 {len(sources)} 个源…")
+    print(f"[1/5] 开始抓取 {len(sources)} 个源…")
     items, failures = fetch_all(sources, settings)
     print(f"      抓到 {len(items)} 条原始条目，{len(failures)} 个源失败")
 
-    print("[2/4] 打分 + 去重…")
+    print("[2/5] 打分 + 去重…")
     history = load_history(settings)
     seen_urls: set[str] = set()
     seen_titles: set[str] = set()
@@ -444,19 +667,25 @@ def main() -> int:
     for category in groups:
         groups[category].sort(key=lambda x: x["score"], reverse=True)
 
+    print(f"[3/5] 抓取原文正文 + 翻译（{len(kept)} 篇）…")
+    enrich_items(kept, settings)
+    ok_article = sum(1 for i in kept if i.get("article_en"))
+    ok_trans = sum(1 for i in kept if i.get("article_zh"))
+    print(f"      正文抓取成功 {ok_article} 篇，翻译完成 {ok_trans} 篇")
+
     stats = {
         "total": len(kept),
         "ok_sources": len(sources) - len(failures),
         "all_sources": len(sources),
     }
 
-    print("[3/4] 写入文件…")
+    print("[4/5] 写入文件…")
     DAILY_DIR.mkdir(parents=True, exist_ok=True)
     md = render_markdown(date_str, groups, failures, stats)
     (DAILY_DIR / f"{date_str}.md").write_text(md, encoding="utf-8")
 
-    html = render_html(date_str, groups, stats)
-    (ROOT / "docs" / "index.html").write_text(html, encoding="utf-8")
+    html_out = render_html(date_str, groups, stats)
+    (ROOT / "docs" / "index.html").write_text(html_out, encoding="utf-8")
 
     # 更新历史索引
     for item in kept:
@@ -472,7 +701,7 @@ def main() -> int:
         json.dumps(archive, ensure_ascii=False), encoding="utf-8"
     )
 
-    print(f"[4/4] 完成：{DAILY_DIR / (date_str + '.md')}")
+    print(f"[5/5] 完成：{DAILY_DIR / (date_str + '.md')}")
     if failures:
         print("\n失败的源：")
         for name, err in sorted(failures.items()):
