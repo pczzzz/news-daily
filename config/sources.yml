@@ -6,7 +6,7 @@
 settings:
   timezone: "Asia/Shanghai"
   # 每个源最多取几条
-  max_per_source: 6
+  max_per_source: 4
   # 低于该分数的条目直接丢弃（0-100）
   min_score: 35
   # 去重历史保留天数
@@ -16,22 +16,23 @@ settings:
   # 并发抓取数
   concurrency: 8
   # 日报最多收录条数
-  max_items: 40
-  # 单个板块最多收录条数（防止科技/快讯类源挤占其他板块）
-  max_per_category: 12
+  max_items: 70
+  # 单个板块最多收录条数（防止热门板块把冷门板块挤没）
+  max_per_category: 6
+  # 只收录多少天内的新闻（超过的旧闻直接丢弃）
+  max_age_days: 7
+
   # ---- 原文正文 + 中文翻译 ----
   # 是否抓取每条新闻的原文正文（失败自动降级为 RSS 摘要）
   enrich_article: true
-  # 每篇最多保留几段正文（太多会让日报变长，10 段约 1500-2500 字）
-  article_paragraphs: 10
+  # 每篇最多保留几段正文（6 段约 1000-1500 字，板块多时要控制）
+  article_paragraphs: 6
   # 是否把标题/摘要/正文逐段翻译成中文（直译，不改写不总结）
   translate: true
   # 每篇文章内部的翻译分批并发数
   translate_concurrency: 4
   # 同时处理几篇文章（抓正文 + 翻译）
-  article_concurrency: 4
-  # 只收录多少天内的新闻（超过的旧闻直接丢弃）
-  max_age_days: 7
+  article_concurrency: 6
 
 # ------------------------------------------------------------
 # 评分关键词：标题/摘要命中即加分
@@ -101,56 +102,280 @@ keywords:
     - policy
     - intelligence
 
-  # 科技新闻专属（+20）：仅在 category 为「科技新闻」时生效
-  tech:
-    - 人工智能
-    - 大模型
-    - 芯片
-    - 半导体
-    - 算力
-    - 量子计算
-    - 机器人
-    - 自动驾驶
-    - 航天
-    - 火箭
-    - 卫星
-    - 操作系统
-    - 开源
-    - 云计算
-    - 数据中心
-    - 英伟达
-    - 苹果
-    - 特斯拉
-    - 微软
-    - 谷歌
-    - 华为
-    - 字节跳动
-    - AI
-    - LLM
-    - GPT
-    - ChatGPT
-    - Gemini
-    - Claude
-    - OpenAI
-    - Nvidia
-    - GPU
-    - chip
-    - semiconductor
-    - quantum
-    - robot
-    - robotaxi
-    - satellite
-    - SpaceX
-    - Starship
-    - Apple
-    - Tesla
-    - Microsoft
-    - Google
-    - Meta
-    - Amazon
-    - startup
-    - data center
-    - cybersecurity
+  # 各板块专属关键词：命中 +20，只对该分类的条目生效
+  category_boost:
+    中国与亚太:
+      - 中国
+      - 北京
+      - 台海
+      - 台湾
+      - 习近平
+      - 日本
+      - 韩国
+      - 朝鲜
+      - 东南亚
+      - 南海
+      - 香港
+      - China
+      - Beijing
+      - Taiwan
+      - Xi Jinping
+      - Japan
+      - Kore
+      - Southeast Asia
+      - South China Sea
+      - Hong Kong
+    财经宏观:
+      - 央行
+      - 利率
+      - 通胀
+      - 股市
+      - 汇率
+      - 降息
+      - 加息
+      - 关税
+      - 油价
+      - 黄金
+      - Fed
+      - Federal Reserve
+      - inflation
+      - GDP
+      - stocks
+      - bond
+      - rate cut
+      - rate hike
+      - tariff
+      - crude
+      - gold
+      - earnings
+    商业与公司:
+      - 收购
+      - 并购
+      - 财报
+      - 裁员
+      - 市值
+      - 营收
+      - 反垄断
+      - 上市
+      - acquisition
+      - merger
+      - earnings
+      - layoff
+      - IPO
+      - revenue
+      - antitrust
+      - profit
+      - CEO
+      - shares
+    科技新闻:
+      - 人工智能
+      - 大模型
+      - 芯片
+      - 半导体
+      - 算力
+      - 量子计算
+      - 机器人
+      - 自动驾驶
+      - 航天
+      - 火箭
+      - 卫星
+      - 操作系统
+      - 开源
+      - 云计算
+      - 数据中心
+      - 英伟达
+      - 苹果
+      - 特斯拉
+      - 微软
+      - 谷歌
+      - 华为
+      - 字节跳动
+      - AI
+      - LLM
+      - GPT
+      - ChatGPT
+      - Gemini
+      - Claude
+      - OpenAI
+      - Nvidia
+      - GPU
+      - chip
+      - semiconductor
+      - quantum
+      - robot
+      - robotaxi
+      - satellite
+      - SpaceX
+      - Starship
+      - Apple
+      - Tesla
+      - Microsoft
+      - Google
+      - Meta
+      - Amazon
+      - startup
+      - data center
+      - cybersecurity
+    科学发现:
+      - 研究
+      - 发现
+      - 科学家
+      - 太空
+      - 行星
+      - 物理
+      - 基因
+      - 实验
+      - 论文
+      - 望远镜
+      - 黑洞
+      - study
+      - discovery
+      - scientists
+      - NASA
+      - space
+      - planet
+      - physics
+      - gene
+      - experiment
+      - telescope
+      - black hole
+      - galaxy
+      - fossil
+      - quantum
+    健康医疗:
+      - 疫苗
+      - 药物
+      - 癌症
+      - 医院
+      - 疫情
+      - 临床
+      - 医保
+      - 病毒
+      - 疾病
+      - vaccine
+      - drug
+      - cancer
+      - hospital
+      - outbreak
+      - FDA
+      - clinical trial
+      - virus
+      - disease
+      - patients
+      - medical
+    社会民生:
+      - 枪击
+      - 灾害
+      - 地震
+      - 洪水
+      - 罢工
+      - 抗议
+      - 移民
+      - 犯罪
+      - 死亡
+      - 事故
+      - 火灾
+      - shooting
+      - disaster
+      - earthquake
+      - flood
+      - strike
+      - protest
+      - immigration
+      - crime
+      - killed
+      - accident
+      - wildfire
+      - police
+    汽车出行:
+      - 特斯拉
+      - 比亚迪
+      - 电动车
+      - 自动驾驶
+      - 电池
+      - 充电
+      - 车企
+      - 销量
+      - 新能源
+      - Tesla
+      - BYD
+      - electric vehicle
+      - EV
+      - autonomous
+      - battery
+      - charging
+      - automaker
+      - vehicle
+      - SUV
+      - pickup
+    体育:
+      - 比赛
+      - 冠军
+      - 世界杯
+      - 奥运
+      - 球队
+      - 球员
+      - 联赛
+      - 决赛
+      - 转会
+      - match
+      - championship
+      - World Cup
+      - Olympic
+      - team
+      - player
+      - league
+      - final
+      - coach
+      - season
+      - playoff
+    文化娱乐:
+      - 电影
+      - 票房
+      - 剧集
+      - 游戏
+      - 音乐
+      - 演员
+      - 导演
+      - 综艺
+      - film
+      - box office
+      - series
+      - streaming
+      - music
+      - actor
+      - director
+      - Netflix
+      - Oscar
+      - album
+      - game
+    教育:
+      - 大学
+      - 学生
+      - 招生
+      - 考试
+      - 教育
+      - 学校
+      - 留学
+      - 教师
+      - university
+      - student
+      - admission
+      - exam
+      - education
+      - school
+      - college
+      - tuition
+      - campus
+      - professor
+    中文视角:
+      - 中国
+      - 美国
+      - 国际
+      - 全球
+      - 经济
+      - 政策
+      - 局势
 
 # 降权词：命中扣分（避免标题党、纯情绪、广告）
 penalties:
@@ -160,13 +385,14 @@ penalties:
   - 点击
   - 广告
   - 直播预告
+  - 独家揭秘
 
 # ------------------------------------------------------------
 # 订阅源清单
 # weight: 1-10，越高排序越靠前
 # ------------------------------------------------------------
 sources:
-  # ========== 国际硬新闻快讯 ==========
+  # ========== 1. 国际硬新闻快讯 ==========
   - name: "BBC World"
     url: "http://feeds.bbci.co.uk/news/world/rss.xml"
     category: "国际硬新闻"
@@ -209,7 +435,7 @@ sources:
     weight: 7
     lang: en
 
-  # ========== 深度政论与地缘分析 ==========
+  # ========== 2. 深度政论与地缘分析 ==========
   - name: "Foreign Affairs"
     url: "https://www.foreignaffairs.com/rss.xml"
     category: "深度政论"
@@ -234,32 +460,70 @@ sources:
     weight: 8
     lang: en
 
-  # ========== 中文视角 ==========
-  - name: "界面新闻"
-    url: "https://a.jiemian.com/index.php?m=article&a=rss"
-    category: "中文视角"
-    weight: 8
-    lang: zh
-
-  - name: "BBC 中文"
-    url: "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml"
-    category: "中文视角"
+  # ========== 3. 中国与亚太 ==========
+  - name: "Nikkei Asia"
+    url: "https://asia.nikkei.com/rss/feed/na-top-stories"
+    category: "中国与亚太"
     weight: 9
-    lang: zh
+    lang: en
 
-  - name: "纽约时报中文网"
-    url: "https://cn.nytimes.com/rss/"
-    category: "中文视角"
+  - name: "SCMP"
+    url: "https://www.scmp.com/rss/91/feed"
+    category: "中国与亚太"
+    weight: 9
+    lang: en
+
+  - name: "联合早报·中国"
+    url: "https://www.zaobao.com.sg/rss/realtime/china"
+    category: "中国与亚太"
     weight: 8
     lang: zh
 
-  - name: "端传媒"
-    url: "https://theinitium.com/feed/"
-    category: "中文视角"
+  - name: "日经中文网"
+    url: "https://cn.nikkei.com/rss/feed/nikkei-top"
+    category: "中国与亚太"
     weight: 8
     lang: zh
 
-  # ========== 科技新闻 ==========
+  # ========== 4. 财经宏观 ==========
+  - name: "CNBC Top News"
+    url: "https://www.cnbc.com/id/100003114/device/rss/rss.html"
+    category: "财经宏观"
+    weight: 9
+    lang: en
+
+  - name: "MarketWatch"
+    url: "https://feeds.marketwatch.com/marketwatch/topstories/"
+    category: "财经宏观"
+    weight: 8
+    lang: en
+
+  - name: "华尔街见闻"
+    url: "https://dedicated.wallstreetcn.com/rss.xml"
+    category: "财经宏观"
+    weight: 8
+    lang: zh
+
+  # ========== 5. 商业与公司 ==========
+  - name: "WSJ Business"
+    url: "https://feeds.a.dj.com/rss/WSJcomUSBusiness.xml"
+    category: "商业与公司"
+    weight: 9
+    lang: en
+
+  - name: "Business Insider"
+    url: "https://www.businessinsider.com/rss"
+    category: "商业与公司"
+    weight: 7
+    lang: en
+
+  - name: "Fortune"
+    url: "https://fortune.com/feed/"
+    category: "商业与公司"
+    weight: 8
+    lang: en
+
+  # ========== 6. 科技新闻 ==========
   - name: "Ars Technica"
     url: "https://feeds.arstechnica.com/arstechnica/index"
     category: "科技新闻"
@@ -308,15 +572,124 @@ sources:
     weight: 6
     lang: zh
 
-  # ========== 军事防务（默认注释，需要时取消注释） ==========
-  # - name: "Defense News"
-  #   url: "https://www.defensenews.com/arc/outboundfeeds/rss/"
-  #   category: "军事防务"
-  #   weight: 8
-  #   lang: en
-  #
-  # - name: "The War Zone"
-  #   url: "https://www.twz.com/feed"
-  #   category: "军事防务"
-  #   weight: 8
-  #   lang: en
+  # ========== 7. 科学发现 ==========
+  - name: "Science Daily"
+    url: "https://www.sciencedaily.com/rss/top/science.xml"
+    category: "科学发现"
+    weight: 8
+    lang: en
+
+  - name: "Space.com"
+    url: "https://www.space.com/feeds/all"
+    category: "科学发现"
+    weight: 8
+    lang: en
+
+  - name: "Quanta Magazine"
+    url: "https://api.quantamagazine.org/feed/"
+    category: "科学发现"
+    weight: 9
+    lang: en
+
+  # ========== 8. 健康医疗 ==========
+  - name: "STAT News"
+    url: "https://www.statnews.com/feed/"
+    category: "健康医疗"
+    weight: 9
+    lang: en
+
+  - name: "Nature"
+    url: "https://www.nature.com/nature.rss"
+    category: "健康医疗"
+    weight: 9
+    lang: en
+
+  # ========== 9. 社会民生 ==========
+  - name: "The Guardian Society"
+    url: "https://www.theguardian.com/society/rss"
+    category: "社会民生"
+    weight: 8
+    lang: en
+
+  - name: "澎湃新闻"
+    url: "https://feedx.net/rss/thepaper.xml"
+    category: "社会民生"
+    weight: 8
+    lang: zh
+
+  # ========== 10. 汽车出行 ==========
+  - name: "Electrek"
+    url: "https://electrek.co/feed/"
+    category: "汽车出行"
+    weight: 8
+    lang: en
+
+  - name: "InsideEVs"
+    url: "https://insideevs.com/rss/news/all/"
+    category: "汽车出行"
+    weight: 8
+    lang: en
+
+  # ========== 11. 体育 ==========
+  - name: "ESPN"
+    url: "https://www.espn.com/espn/rss/news"
+    category: "体育"
+    weight: 8
+    lang: en
+
+  - name: "BBC Sport"
+    url: "https://feeds.bbci.co.uk/sport/rss.xml"
+    category: "体育"
+    weight: 8
+    lang: en
+
+  # ========== 12. 文化娱乐 ==========
+  - name: "Variety"
+    url: "https://variety.com/feed/"
+    category: "文化娱乐"
+    weight: 8
+    lang: en
+
+  - name: "Polygon"
+    url: "https://www.polygon.com/rss/index.xml"
+    category: "文化娱乐"
+    weight: 7
+    lang: en
+
+  # ========== 13. 教育 ==========
+  - name: "Times Higher Education"
+    url: "https://www.timeshighereducation.com/feed"
+    category: "教育"
+    weight: 8
+    lang: en
+
+  - name: "Inside Higher Ed"
+    url: "https://www.insidehighered.com/rss.xml"
+    category: "教育"
+    weight: 7
+    lang: en
+
+  # ========== 14. 中文视角 ==========
+  - name: "界面新闻"
+    url: "https://a.jiemian.com/index.php?m=article&a=rss"
+    category: "中文视角"
+    weight: 8
+    lang: zh
+
+  - name: "BBC 中文"
+    url: "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml"
+    category: "中文视角"
+    weight: 9
+    lang: zh
+
+  - name: "纽约时报中文网"
+    url: "https://cn.nytimes.com/rss/"
+    category: "中文视角"
+    weight: 8
+    lang: zh
+
+  - name: "端传媒"
+    url: "https://theinitium.com/feed/"
+    category: "中文视角"
+    weight: 8
+    lang: zh
