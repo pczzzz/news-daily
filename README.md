@@ -1,6 +1,6 @@
 # 每日资讯日报
 
-每天早上 7:30，自动从 23 个一手信源抓取政治、军事、时事、科技新闻，按重要性打分排序，再把**原文正文完整抓下来逐段直译成中文**，生成一份不用翻墙、不用懂英文也能直接读的日报。
+每天早上 7:30，自动从 46 个一手信源抓取政治、财经、科技、科学、体育等 14 个板块的新闻，按重要性打分排序，再把**原文正文完整抓下来逐段直译成中文**，生成一份不用翻墙、不用懂英文也能直接读的日报。
 
 **为什么不用现成的 RSS 阅读器？** 因为你的网络直连不了 Inoreader、Feedly、BBC、路透——实测全部超时。而 GitHub 是通的。所以这里把抓取任务放到 **GitHub 的服务器**上跑（它们在海外，能正常访问这些源），你只需要看结果。
 
@@ -199,12 +199,25 @@ CDN 有缓存延迟，等 2～3 分钟。如果还不行，检查仓库里有没
 
 ## 六、当前信源
 
-**国际硬新闻**：BBC World、Al Jazeera、The Guardian、NPR、WSJ、France 24、DW
-**深度政论**：Foreign Affairs、Foreign Policy、The Diplomat、War on the Rocks
-**科技新闻**：Ars Technica、MIT Technology Review、The Verge、TechCrunch、Hacker News、IT之家、爱范儿、少数派
-**中文视角**：界面新闻、BBC 中文、纽约时报中文网、端传媒
-**军事防务**（默认关闭）：Defense News、The War Zone
+共 **46 个源、14 个板块**，按以下顺序展示：
 
-> 科技新闻的关键词是独立的 `tech` 组（+20），且只对 `category: 科技新闻` 的条目生效，不会把国际新闻里提到 AI/芯片的条目一起抬分。
+| 板块 | 信源 |
+|---|---|
+| 国际硬新闻 | BBC World、Al Jazeera、The Guardian、NPR、WSJ、France 24、DW |
+| 深度政论 | Foreign Affairs、Foreign Policy、The Diplomat、War on the Rocks |
+| 中国与亚太 | SCMP、日经中文网、Japan Times |
+| 财经宏观 | CNBC、MarketWatch、华尔街见闻 |
+| 商业与公司 | WSJ Business、Business Insider、Fortune |
+| 科技新闻 | Ars Technica、MIT Technology Review、The Verge、TechCrunch、Hacker News、IT之家、爱范儿、少数派 |
+| 科学发现 | Science Daily、Space.com、Quanta |
+| 健康医疗 | STAT News、Nature |
+| 社会民生 | The Guardian Society、澎湃新闻 |
+| 汽车出行 | Electrek、InsideEVs |
+| 体育 | ESPN、BBC Sport |
+| 文化娱乐 | Variety、Polygon |
+| 教育 | Inside Higher Ed |
+| 中文视角 | 界面新闻、BBC 中文、纽约时报中文网、端传媒 |
 
-> 这些源在 GitHub 服务器上大多能正常访问。你本地测试时会有大量超时，那是正常的，不用管。
+> **板块专属关键词**：每个板块在 `keywords.category_boost` 下有一组关键词（命中 +20），只对该板块的条目生效。这样同一条「AI 芯片」新闻不会同时把国际新闻和科技新闻的分数一起抬上去。
+
+> **导航条**：网页顶部有粘性导航条，点板块名直接跳到对应位置（`<h2 id="板块名">` 锚点）。
