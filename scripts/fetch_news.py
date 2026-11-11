@@ -69,7 +69,9 @@ NOISE_TEXT = re.compile(
     r"watch\s+this\s+video|your\s+browser\s+does\s+not|"
     r"cookie|subscribe|newsletter|sign\s+up|sign\s+in|log\s+in|"
     r"all\s+rights\s+reserved|advertisement|share\s+this|follow\s+us|"
-    r"read\s+more|related\s+stories|download\s+the\s+app|click\s+here"
+    r"read\s+more|related\s+stories|download\s+the\s+app|click\s+here|"
+    r"accuracy\s+and\s+availability|may\s+also\s+be\s+revised|may\s+vary|"
+    r"is\s+not\s+responsible|does\s+not\s+provide\s+or\s+accept|editorial\s+independence"
     r")",
     re.I,
 )
