@@ -1,6 +1,6 @@
 # 每日资讯日报
 
-每天早上 7:30，自动从 46 个一手信源抓取政治、财经、科技、科学、体育等 14 个板块的新闻，按重要性打分排序，再把**原文正文完整抓下来逐段直译成中文**，生成一份不用翻墙、不用懂英文也能直接读的日报。
+每天早上 7:30，自动从 48 个一手信源抓取政治、财经、科技、科学、体育等 14 个板块的新闻，按重要性打分排序，再把**原文正文完整抓下来逐段直译成中文**，生成一份不用翻墙、不用懂英文也能直接读的日报。
 
 **为什么不用现成的 RSS 阅读器？** 因为你的网络直连不了 Inoreader、Feedly、BBC、路透——实测全部超时。而 GitHub 是通的。所以这里把抓取任务放到 **GitHub 的服务器**上跑（它们在海外，能正常访问这些源），你只需要看结果。
 
@@ -199,7 +199,7 @@ CDN 有缓存延迟，等 2～3 分钟。如果还不行，检查仓库里有没
 
 ## 六、当前信源
 
-共 **46 个源、14 个板块**，按以下顺序展示：
+共 **48 个源、14 个板块**，按以下顺序展示：
 
 | 板块 | 信源 |
 |---|---|
@@ -209,7 +209,7 @@ CDN 有缓存延迟，等 2～3 分钟。如果还不行，检查仓库里有没
 | 财经宏观 | CNBC、MarketWatch、华尔街见闻 |
 | 商业与公司 | WSJ Business、Business Insider、Fortune |
 | 科技新闻 | Ars Technica、MIT Technology Review、The Verge、TechCrunch、Hacker News、IT之家、爱范儿、少数派 |
-| 科学发现 | Science Daily、Space.com、Quanta |
+| 外媒报道的中国 | The Guardian · China、BBC · China、The Economist · China、Sixth Tone、中国数字时代 |
 | 健康医疗 | STAT News、Nature |
 | 社会民生 | The Guardian Society、澎湃新闻 |
 | 汽车出行 | Electrek、InsideEVs |
