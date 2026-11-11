@@ -19,6 +19,15 @@ settings:
   max_items: 40
   # 单个板块最多收录条数（防止科技/快讯类源挤占其他板块）
   max_per_category: 12
+  # ---- 原文正文 + 中文翻译 ----
+  # 是否抓取每条新闻的原文正文（失败自动降级为 RSS 摘要）
+  enrich_article: true
+  # 每篇最多保留几段正文（太多会让日报变长，10 段约 1500-2500 字）
+  article_paragraphs: 10
+  # 是否把标题/摘要/正文逐段翻译成中文（直译，不改写不总结）
+  translate: true
+  # 翻译并发数（太大容易被 Google 限流）
+  translate_concurrency: 6
   # 只收录多少天内的新闻（超过的旧闻直接丢弃）
   max_age_days: 7
 
