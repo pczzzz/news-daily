@@ -416,8 +416,23 @@ def main() -> int:
         if item["score"] >= min_score:
             kept.append(item)
 
+    # 先按分数全局排序，再按板块配额截断，
+    # 避免科技/快讯类源数量多就把其他板块挤没。
+    kept.sort(key=lambda x: x["score"], reverse=True)
+    max_per_category = int(settings.get("max_per_category", 0) or 0)
+    if max_per_category > 0:
+        quota: dict[str, int] = {}
+        limited: list[dict] = []
+        for item in kept:
+            cat = item["category"]
+            if quota.get(cat, 0) >= max_per_category:
+                continue
+            quota[cat] = quota.get(cat, 0) + 1
+            limited.append(item)
+        kept = limited
+
     max_items = settings.get("max_items", 40)
-    kept = sorted(kept, key=lambda x: x["score"], reverse=True)[:max_items]
+    kept = kept[:max_items]
     print(
         f"      保留 {len(kept)} 条（阈值 {min_score} 分，上限 {max_items} 条，"
         f"丢弃旧闻 {expired} 条）"
