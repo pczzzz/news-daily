@@ -701,7 +701,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }}, {{ passive: true }});
 
   window.addEventListener('resize', update);
-  update();</script>
+  update();
+}})();</script>
 </body>
 </html>
 """
