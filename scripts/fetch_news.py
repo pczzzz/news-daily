@@ -837,23 +837,32 @@ def main() -> int:
             seen_titles.add(t)
 
         item["score"] = score_item(item, keywords, penalties)
-        if item["score"] >= min_score:
-            kept.append(item)
+        kept.append(item)
 
-    # 先按分数全局排序，再按板块配额截断，
-    # 避免科技/快讯类源数量多就把其他板块挤没。
-    kept.sort(key=lambda x: x["score"], reverse=True)
+    # 按板块筛选：达标者按分数取前 max_per_category 条；
+    # 若达标不足 min_per_category 条，用该板块剩余最高分的条目补足，
+    # 避免某个板块（如财经宏观）因为源少、关键词窄而整块空掉。
     max_per_category = int(settings.get("max_per_category", 0) or 0)
-    if max_per_category > 0:
-        quota: dict[str, int] = {}
-        limited: list[dict] = []
-        for item in kept:
-            cat = item["category"]
-            if quota.get(cat, 0) >= max_per_category:
-                continue
-            quota[cat] = quota.get(cat, 0) + 1
-            limited.append(item)
-        kept = limited
+    min_per_category = int(settings.get("min_per_category", 0) or 0)
+    by_cat: dict[str, list[dict]] = {}
+    for item in kept:
+        by_cat.setdefault(item["category"], []).append(item)
+
+    limited: list[dict] = []
+    for cat, lst in by_cat.items():
+        lst.sort(key=lambda x: x["score"], reverse=True)
+        picked = [x for x in lst if x["score"] >= min_score]
+        if max_per_category > 0:
+            picked = picked[:max_per_category]
+        if len(picked) < min_per_category:
+            chosen = {id(x) for x in picked}
+            rest = [x for x in lst if id(x) not in chosen]
+            picked = picked + rest[: min_per_category - len(picked)]
+        limited.extend(picked)
+    kept = limited
+
+    # 全局按分数排序后截断总量
+    kept.sort(key=lambda x: x["score"], reverse=True)
 
     max_items = settings.get("max_items", 40)
     kept = kept[:max_items]
