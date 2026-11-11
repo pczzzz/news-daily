@@ -216,23 +216,28 @@ keywords:
       - startup
       - data center
       - cybersecurity
-    科学发现:
-      - 研究
-      - 发现
-      - 科学家
-      - 太空
-      - 行星
-      - 物理
-      - 基因
-      - 实验
-      - 论文
-      - 望远镜
-      - 黑洞
-      - study
-      - discovery
-      - scientists
-      - NASA
-      - space
+    外媒报道的中国:
+      - 中国
+      - 北京
+      - 习近平
+      - 中共
+      - 台海
+      - 台湾
+      - 香港
+      - 新疆
+      - 上海
+      - 深圳
+      - 中国制造
+      - 国产
+      - China
+      - Chinese
+      - Beijing
+      - Xi Jinping
+      - CCP
+      - Taiwan
+      - Hong Kong
+      - Xinjiang
+      - Shanghai
       - planet
       - physics
       - gene
@@ -566,24 +571,37 @@ sources:
     weight: 6
     lang: zh
 
-  # ========== 7. 科学发现 ==========
-  - name: "Science Daily"
-    url: "https://www.sciencedaily.com/rss/top/science.xml"
-    category: "科学发现"
+  # ========== 7. 外媒报道的中国 ==========
+  # 只看热度与重要性，不按立场好坏筛选（自由派 / 保守派 / 官方口径 / 批评性媒体都在）
+  - name: "The Guardian · China"
+    url: "https://www.theguardian.com/world/china/rss"
+    category: "外媒报道的中国"
+    weight: 10
+    lang: en
+
+  - name: "BBC · China"
+    url: "https://feeds.bbci.co.uk/news/world/asia/china/rss.xml"
+    category: "外媒报道的中国"
+    weight: 10
+    lang: en
+
+  - name: "The Economist · China"
+    url: "https://www.economist.com/china/rss.xml"
+    category: "外媒报道的中国"
+    weight: 10
+    lang: en
+
+  - name: "Sixth Tone"
+    url: "https://www.sixthtone.com/rss"
+    category: "外媒报道的中国"
     weight: 8
     lang: en
 
-  - name: "Space.com"
-    url: "https://www.space.com/feeds/all"
-    category: "科学发现"
+  - name: "中国数字时代"
+    url: "https://chinadigitaltimes.net/chinese/feed/"
+    category: "外媒报道的中国"
     weight: 8
-    lang: en
-
-  - name: "Quanta Magazine"
-    url: "https://api.quantamagazine.org/feed/"
-    category: "科学发现"
-    weight: 9
-    lang: en
+    lang: zh
 
   # ========== 8. 健康医疗 ==========
   - name: "STAT News"
