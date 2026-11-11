@@ -26,8 +26,10 @@ settings:
   article_paragraphs: 10
   # 是否把标题/摘要/正文逐段翻译成中文（直译，不改写不总结）
   translate: true
-  # 翻译并发数（太大容易被 Google 限流）
-  translate_concurrency: 6
+  # 每篇文章内部的翻译分批并发数
+  translate_concurrency: 4
+  # 同时处理几篇文章（抓正文 + 翻译）
+  article_concurrency: 4
   # 只收录多少天内的新闻（超过的旧闻直接丢弃）
   max_age_days: 7
 
