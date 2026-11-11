@@ -1,0 +1,44 @@
+name: 每日资讯日报
+
+# 北京时间每天 07:30 自动跑（cron 用 UTC，23:30 = 次日 07:30 北京）
+# 想改时间：把 23 改成 UTC 小时数（北京时间 - 8 小时）
+on:
+  schedule:
+    - cron: "30 23 * * *"
+  workflow_dispatch: {}   # 支持在 Actions 页面手动点运行
+
+permissions:
+  contents: write         # 需要写回仓库
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 抓取并生成日报
+        run: python scripts/fetch_news.py
+
+      - name: 提交结果
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          if git diff --staged --quiet; then
+            echo "没有新内容，跳过提交"
+          else
+            git commit -m "chore: 更新 $(date -u -d '+8 hours' +%Y-%m-%d) 日报"
+            git push
+          fi
