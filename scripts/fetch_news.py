@@ -546,24 +546,38 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <style>
   :root {{ --fg:#1a1a1a; --muted:#6b7280; --bg:#fafafa; --card:#fff; --line:#e5e7eb; --accent:#1d4ed8; --soft:#f3f4f6; }}
   @media (prefers-color-scheme: dark) {{
-    :root {{ --fg:#e5e7eb; --muted:#9ca3af; --bg:#111827; --card:#1f2937; --line:#374151; --accent:#60a5fa; --soft:#111827; }}
+    :root {{ --fg:#e5e7eb; --muted:#9ca3af; --bg:#111827; --card:#1f2937; --line:#374151; --accent:#60a5fa; --soft:#1b2432; }}
   }}
   * {{ box-sizing: border-box; }}
-  body {{ margin:0; padding:24px 16px; background:var(--bg); color:var(--fg);
+  body {{ margin:0; background:var(--bg); color:var(--fg);
          font:16px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }}
-  .wrap {{ max-width:840px; margin:0 auto; }}
+  .layout {{ display:flex; gap:36px; max-width:1180px; margin:0 auto; }}
+
+  /* ============ 左侧板块导航 ============ */
+  .sidebar {{ position:sticky; top:0; align-self:flex-start; flex:0 0 210px; width:210px;
+             height:100vh; overflow-y:auto; padding:30px 0 40px;
+             border-right:1px solid var(--line); scrollbar-width:thin; }}
+  .sidebar .sb-title {{ font-size:12px; letter-spacing:.08em; color:var(--muted);
+                        text-transform:uppercase; padding:0 18px 10px; }}
+  .sidebar a {{ display:flex; align-items:center; justify-content:space-between; gap:8px;
+               padding:7px 14px 7px 15px; margin:1px 8px; border-radius:8px;
+               color:var(--fg); text-decoration:none; font-size:14px; line-height:1.45;
+               border-left:3px solid transparent; transition:background .15s,color .15s; }}
+  .sidebar a:hover {{ background:var(--soft); }}
+  .sidebar a.active {{ background:var(--soft); color:var(--accent);
+                      border-left-color:var(--accent); font-weight:600; }}
+  .sidebar .cnt {{ flex:0 0 auto; min-width:24px; text-align:center; font-size:12px;
+                  padding:1px 6px; border-radius:999px; background:var(--soft); color:var(--muted); }}
+  .sidebar a.active .cnt {{ background:var(--accent); color:#fff; }}
+
+  /* ============ 正文 ============ */
+  .main {{ flex:1; min-width:0; padding:30px 32px 80px 0; }}
   h1 {{ font-size:26px; margin:0 0 4px; }}
-  .meta {{ color:var(--muted); font-size:14px; margin-bottom:28px; }}
-  .nav {{ position:sticky; top:0; z-index:10; display:flex; gap:6px; overflow-x:auto;
-          background:var(--bg); border-bottom:1px solid var(--line); margin:0 -16px 16px;
-          padding:10px 16px; scrollbar-width:none; }}
-  .nav::-webkit-scrollbar {{ display:none; }}
-  .nav a {{ flex:0 0 auto; padding:5px 12px; border-radius:999px; background:var(--soft);
-            color:var(--fg); text-decoration:none; font-size:13px; white-space:nowrap;
-            border:1px solid var(--line); transition:.15s; }}
-  .nav a:hover, .nav a:active {{ background:var(--accent); color:#fff; border-color:var(--accent); }}
-  h2 {{ font-size:18px; margin:32px 0 14px; padding-left:10px; border-left:4px solid var(--accent);
-        scroll-margin-top:64px; }}
+  .meta {{ color:var(--muted); font-size:14px; margin-bottom:26px; }}
+  h2 {{ font-size:18px; margin:34px 0 14px; padding-left:10px; border-left:4px solid var(--accent);
+        scroll-margin-top:16px; display:flex; align-items:center; gap:10px; }}
+  h2 .h2cnt {{ font-size:12px; font-weight:500; color:var(--muted); background:var(--soft);
+              padding:2px 9px; border-radius:999px; border:1px solid var(--line); }}
   .item {{ background:var(--card); border:1px solid var(--line); border-radius:10px;
            padding:16px 18px; margin-bottom:14px; transition:.15s; }}
   .item:hover {{ border-color:var(--accent); }}
@@ -585,19 +599,81 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .src {{ display:inline-block; margin-top:10px; font-size:13px; color:var(--accent); text-decoration:none; }}
   .src:hover {{ text-decoration:underline; }}
   .fail {{ margin-top:36px; font-size:13px; color:var(--muted); }}
+
+  /* ============ 移动端：抽屉式导航 ============ */
+  .nav-toggle {{ display:none; position:fixed; left:16px; bottom:20px; z-index:80;
+                align-items:center; gap:6px; padding:11px 18px; border-radius:999px;
+                background:var(--accent); color:#fff; border:none; font-size:14px;
+                font-family:inherit; box-shadow:0 6px 20px rgba(29,78,216,.4); cursor:pointer; }}
+  .mask {{ display:none; }}
+  @media (max-width: 900px) {{
+    .sidebar {{ position:fixed; left:0; top:0; bottom:0; height:auto;
+               width:258px; flex-basis:258px; z-index:75;
+               background:var(--card); border-right:1px solid var(--line);
+               box-shadow:2px 0 24px rgba(0,0,0,.18);
+               transform:translateX(-100%); transition:transform .22s ease;
+               padding-top:20px; }}
+    .sidebar.open {{ transform:none; }}
+    .main {{ padding:22px 16px 96px; }}
+    .nav-toggle {{ display:flex; }}
+    .mask.show {{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.38); z-index:70; }}
+    h1 {{ font-size:22px; }}
+  }}
 </style>
 </head>
 <body>
-<div class="wrap">
+<button class="nav-toggle" id="navToggle">☰ 板块导航</button>
+<div class="mask" id="mask"></div>
+<div class="layout">
+{nav}
+<main class="main">
 <h1>每日资讯日报 · {date_str}</h1>
 <div class="meta">{generated}　共 {total} 条 · {ok}/{all} 个源正常 · 中文为逐段直译</div>
-{nav}
 {body}
+</main>
 </div>
+<script>
+(function () {{
+  var sb = document.getElementById('sidebar'),
+      tg = document.getElementById('navToggle'),
+      mk = document.getElementById('mask');
+  if (!sb) return;
+  function close() {{ sb.classList.remove('open'); mk.classList.remove('show'); }}
+  tg.addEventListener('click', function () {{
+    sb.classList.toggle('open');
+    mk.classList.toggle('show');
+  }});
+  mk.addEventListener('click', close);
+  sb.addEventListener('click', function (e) {{
+    if (e.target.closest('a')) close();
+  }});
+  document.addEventListener('keydown', function (e) {{
+    if (e.key === 'Escape') close();
+  }});
+
+  // 滚动时高亮当前板块
+  var links = [].slice.call(sb.querySelectorAll('a[href^="#"]'));
+  var map = {{}};
+  links.forEach(function (a) {{
+    var id = decodeURIComponent(a.getAttribute('href')).slice(1);
+    var el = document.getElementById(id);
+    if (el) map[id] = a;
+  }});
+  if (!('IntersectionObserver' in window)) return;
+  var obs = new IntersectionObserver(function (entries) {{
+    entries.forEach(function (en) {{
+      if (!en.isIntersecting) return;
+      links.forEach(function (a) {{ a.classList.remove('active'); }});
+      var a = map[en.target.id];
+      if (a) {{ a.classList.add('active'); a.scrollIntoView({{ block: 'nearest' }}); }}
+    }});
+  }}, {{ rootMargin: '-8% 0px -72% 0px' }});
+  Object.keys(map).forEach(function (id) {{ obs.observe(document.getElementById(id)); }});
+}})();
+</script>
 </body>
 </html>
 """
-
 
 def render_item_html(item: dict) -> str:
     published = item.get("published")
@@ -644,11 +720,19 @@ def render_html(date_str: str, groups: dict[str, list[dict]], stats: dict) -> st
         items = groups.get(category)
         if not items:
             continue
-        nav_links.append(f'<a href="#{category}">{category}</a>')
-        blocks.append(f'<h2 id="{category}">{category}</h2>')
+        n = len(items)
+        nav_links.append(
+            f'<a href="#{category}"><span>{category}</span><span class="cnt">{n}</span></a>'
+        )
+        blocks.append(f'<h2 id="{category}">{category}<span class="h2cnt">{n} 条</span></h2>')
         for item in items:
             blocks.append(render_item_html(item))
-    nav = f'<nav class="nav">{"".join(nav_links)}</nav>' if nav_links else ""
+    nav = (
+        f'<aside class="sidebar" id="sidebar"><div class="sb-title">板块导航</div>'
+        f'{"".join(nav_links)}</aside>'
+        if nav_links
+        else ""
+    )
     return HTML_TEMPLATE.format(
         date_str=date_str,
         generated=datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
