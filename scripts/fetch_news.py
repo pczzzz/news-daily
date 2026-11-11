@@ -408,13 +408,13 @@ def score_item(item: dict, keywords: dict, penalties: list[str]) -> int:
             score += 8
             break
 
-    # 科技新闻专属加权（+20）：只对科技新闻板块生效，
-    # 否则同一条 AI/芯片新闻会把国际新闻板块的分数推虚。
-    if item.get("category") == "科技新闻":
-        for word in keywords.get("tech", []):
-            if word.lower() in text_lower:
-                score += 20
-                break
+    # 板块专属关键词（+20）：只对该分类的条目生效，
+    # 否则同一条 AI/芯片新闻会把其他板块的分数推虚。
+    boost_words = (keywords.get("category_boost") or {}).get(item.get("category"), [])
+    for word in boost_words:
+        if word.lower() in text_lower:
+            score += 20
+            break
 
     # 源权重（1-10 → 最多 15 分）
     score += int(item.get("weight", 5) * 1.5)
@@ -469,7 +469,23 @@ def load_history(settings: dict) -> dict:
 # ----------------------------------------------------------------------
 # 渲染
 # ----------------------------------------------------------------------
-CATEGORY_ORDER = ["国际硬新闻", "深度政论", "科技新闻", "中文视角", "军事防务", "其他"]
+CATEGORY_ORDER = [
+    "国际硬新闻",
+    "深度政论",
+    "中国与亚太",
+    "财经宏观",
+    "商业与公司",
+    "科技新闻",
+    "科学发现",
+    "健康医疗",
+    "社会民生",
+    "汽车出行",
+    "体育",
+    "文化娱乐",
+    "教育",
+    "中文视角",
+    "其他",
+]
 
 
 def render_markdown(date_str: str, groups: dict[str, list[dict]], failures: dict[str, str], stats: dict) -> str:
@@ -538,7 +554,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .wrap {{ max-width:840px; margin:0 auto; }}
   h1 {{ font-size:26px; margin:0 0 4px; }}
   .meta {{ color:var(--muted); font-size:14px; margin-bottom:28px; }}
-  h2 {{ font-size:18px; margin:32px 0 14px; padding-left:10px; border-left:4px solid var(--accent); }}
+  .nav {{ position:sticky; top:0; z-index:10; display:flex; gap:6px; overflow-x:auto;
+          background:var(--bg); border-bottom:1px solid var(--line); margin:0 -16px 16px;
+          padding:10px 16px; scrollbar-width:none; }}
+  .nav::-webkit-scrollbar {{ display:none; }}
+  .nav a {{ flex:0 0 auto; padding:5px 12px; border-radius:999px; background:var(--soft);
+            color:var(--fg); text-decoration:none; font-size:13px; white-space:nowrap;
+            border:1px solid var(--line); transition:.15s; }}
+  .nav a:hover, .nav a:active {{ background:var(--accent); color:#fff; border-color:var(--accent); }}
+  h2 {{ font-size:18px; margin:32px 0 14px; padding-left:10px; border-left:4px solid var(--accent);
+        scroll-margin-top:64px; }}
   .item {{ background:var(--card); border:1px solid var(--line); border-radius:10px;
            padding:16px 18px; margin-bottom:14px; transition:.15s; }}
   .item:hover {{ border-color:var(--accent); }}
@@ -566,6 +591,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <div class="wrap">
 <h1>每日资讯日报 · {date_str}</h1>
 <div class="meta">{generated}　共 {total} 条 · {ok}/{all} 个源正常 · 中文为逐段直译</div>
+{nav}
 {body}
 </div>
 </body>
@@ -613,19 +639,23 @@ def render_item_html(item: dict) -> str:
 
 def render_html(date_str: str, groups: dict[str, list[dict]], stats: dict) -> str:
     blocks = []
+    nav_links = []
     for category in CATEGORY_ORDER:
         items = groups.get(category)
         if not items:
             continue
-        blocks.append(f"<h2>{category}</h2>")
+        nav_links.append(f'<a href="#{category}">{category}</a>')
+        blocks.append(f'<h2 id="{category}">{category}</h2>')
         for item in items:
             blocks.append(render_item_html(item))
+    nav = f'<nav class="nav">{"".join(nav_links)}</nav>' if nav_links else ""
     return HTML_TEMPLATE.format(
         date_str=date_str,
         generated=datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),
         total=stats["total"],
         ok=stats["ok_sources"],
         all=stats["all_sources"],
+        nav=nav,
         body="\n".join(blocks),
     )
 
