@@ -476,7 +476,7 @@ CATEGORY_ORDER = [
     "财经宏观",
     "商业与公司",
     "科技新闻",
-    "科学发现",
+    "外媒报道的中国",
     "健康医疗",
     "社会民生",
     "汽车出行",
@@ -651,26 +651,57 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     if (e.key === 'Escape') close();
   }});
 
-  // 滚动时高亮当前板块
+  // 滚动 / 点击时高亮当前板块
   var links = [].slice.call(sb.querySelectorAll('a[href^="#"]'));
-  var map = {{}};
+  var pairs = [];
   links.forEach(function (a) {{
     var id = decodeURIComponent(a.getAttribute('href')).slice(1);
     var el = document.getElementById(id);
-    if (el) map[id] = a;
+    if (el) pairs.push({{ a: a, el: el }});
   }});
-  if (!('IntersectionObserver' in window)) return;
-  var obs = new IntersectionObserver(function (entries) {{
-    entries.forEach(function (en) {{
-      if (!en.isIntersecting) return;
-      links.forEach(function (a) {{ a.classList.remove('active'); }});
-      var a = map[en.target.id];
-      if (a) {{ a.classList.add('active'); a.scrollIntoView({{ block: 'nearest' }}); }}
+  if (!pairs.length) return;
+
+  var OFFSET = 140;       // 判定线：距视口顶部 140px
+  var lockUntil = 0;      // 点击后的短暂锁，避免平滑滚动过程被覆盖
+  var current = null;
+
+  function setActive(target) {{
+    if (!target || target === current) return;
+    current = target;
+    links.forEach(function (a) {{ a.classList.toggle('active', a === target); }});
+    target.scrollIntoView({{ block: 'nearest' }});
+  }}
+
+  function update() {{
+    var best = pairs[0];
+    for (var i = 0; i < pairs.length; i++) {{
+      if (pairs[i].el.getBoundingClientRect().top <= OFFSET) best = pairs[i];
+      else break;
+    }}
+    // 已滚到底：强制高亮最后一个板块
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) {{
+      best = pairs[pairs.length - 1];
+    }}
+    setActive(best.a);
+  }}
+
+  links.forEach(function (a) {{
+    a.addEventListener('click', function () {{
+      setActive(a);                 // 点击瞬间就高亮
+      lockUntil = Date.now() + 700; // 平滑滚动期间不抢回
     }});
-  }}, {{ rootMargin: '-8% 0px -72% 0px' }});
-  Object.keys(map).forEach(function (id) {{ obs.observe(document.getElementById(id)); }});
-}})();
-</script>
+  }});
+
+  var ticking = false;
+  window.addEventListener('scroll', function () {{
+    if (Date.now() < lockUntil) return;
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {{ update(); ticking = false; }});
+  }}, {{ passive: true }});
+
+  window.addEventListener('resize', update);
+  update();</script>
 </body>
 </html>
 """
